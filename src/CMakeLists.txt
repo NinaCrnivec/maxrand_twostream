@@ -8,6 +8,8 @@ set( general_sources
   "eddington.f90"  
   "twostream.f90"
   "twostream_maxrand.f90"
+  "nina_maxrand_wrapper.f90"
+  "nina_maxrand.c"
   )
 
 add_library( maxrand STATIC ${general_sources} )

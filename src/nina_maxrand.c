@@ -443,9 +443,7 @@ It is noteworthy that a particular coefficient pj (j=1,2,3,4) is set equal to 1
 if an undetermined expression 0/0 occurs.
 This follows from physical reasoning or from applying l'Hopital's rule.
   
- 
-  
-OPOMBA TOREJ:
+OPOMBA:
 OCITNO BOS MORALA S KAKSNIM IF-STAVKOM POSTAVITI TE KOEFICIENTE NA 1;
 V PRIMERU DA IMAM IN V STEVCU IN V IMENOVALCU 0; TOREJ 0/0;
 PREMISLI TUDI, KAJ SE ZGODI V PRIMERU, DA DOBIM: stevilo/0;

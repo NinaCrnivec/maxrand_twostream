@@ -50,37 +50,26 @@ program main
   w0pp = ( kscaf + kscac ) / (tauf + tauc)
   gpp  = (kscaf*gf + kscac*gc) / (tauf + tauc) / w0pp
 
-  ! Compute regular twostream fluxes with plane parallel approx.
+  
+
+  print *,'MaxRand computations...'
   call cpu_time(start)
   do k=1,iter
-    call delta_eddington_twostream(taupp, w0pp, gpp, mu0, incSolar, albedo, Sf, Ednf, Eupf)
+    call delta_eddington_twostream_maxrand( &
+                      tauf, w0f, gf,        &
+                      tauc, w0c, gc,        &
+                      cfrac,                &
+                      mu0, incSolar*mu0, albedo,&
+                      Sf, Ednf, Eupf,       &
+                      Sc, Ednc, Eupc)
   enddo
   call cpu_time(finish)
 
-  print *,'twostr benchmark :: ',finish-start
+  print *,'maxrand benchmark :: ',finish-start
 
   do k=1,ke1
-    print *,k,'::',Sf(k), Ednf(k), Eupf(k)
+    print *,k,'::',Sf(k), Ednf(k), Eupf(k), '::', Sc(k), Ednc(k), Eupc(k)
   enddo
-
-  !print *,'MaxRand computations...'
-  !call cpu_time(start)
-  !do k=1,iter
-  !  call delta_eddington_twostream_maxrand( &
-  !                    tauf, w0f, gf,        &
-  !                    tauc, w0c, gc,        &
-  !                    cfrac,                &
-  !                    mu0, incSolar, albedo,&
-  !                    Sf, Ednf, Eupf,       &
-  !                    Sc, Ednc, Eupc)
-  !enddo
-  !call cpu_time(finish)
-
-  !print *,'maxrand benchmark :: ',finish-start
-
-  !do k=1,ke1
-  !  print *,k,'::',Sf(k), Ednf(k), Eupf(k), '::', Sc(k), Ednc(k), Eupc(k)
-  !enddo
 
   print *,'Nina`s MaxRand computations...'
   call cpu_time(start)
@@ -100,5 +89,22 @@ program main
   do k=1,ke1
     print *,k,'::',Sf(k), Ednf(k), Eupf(k), '::', Sc(k), Ednc(k), Eupc(k)
   enddo
+  
+  print *, ''
+  do k=1,ke1
+    print *,k,'::',Sf(k)+Sc(k), Ednf(k)+ Ednc(k), Eupf(k)+Eupc(k)
+  enddo
+  
+! Compute regular twostream fluxes with plane parallel approx.
+  call cpu_time(start)
+  do k=1,iter
+    call delta_eddington_twostream(taupp, w0pp, gpp, mu0, incSolar*mu0, albedo, Sf, Ednf, Eupf)
+  enddo
+  call cpu_time(finish)
 
+  print *,'twostr benchmark :: ',finish-start
+
+  do k=1,ke1
+    print *,k,'::',Sf(k), Ednf(k), Eupf(k)
+  enddo
 end program

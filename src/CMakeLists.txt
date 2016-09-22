@@ -10,6 +10,7 @@ set( general_sources
   "twostream_maxrand.f90"
   "nina_maxrand_wrapper.f90"
   "nina_maxrand.c"
+  "gauss.c"
   )
 
 add_library( maxrand STATIC ${general_sources} )

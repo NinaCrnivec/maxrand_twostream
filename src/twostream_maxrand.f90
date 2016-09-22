@@ -115,8 +115,8 @@ module m_twostream_maxrand
             b3 = one
           endif
 
-          Sf(k) = a33f(k) * (b1 * Sf(k-1) + (one - b3) * Sc(k-1))
-          Sc(k) = a33c(k) * ((one-b1) * Sf(k-1) + b3 * Sc(k-1))
+          Sf(k) = a33f(k-1) * (b1 * Sf(k-1) + (one - b3) * Sc(k-1))
+          Sc(k) = a33c(k-1) * ((one-b1) * Sf(k-1) + b3 * Sc(k-1))
         enddo
 
         ! Last level just transmit radiation through the layer til the surface...

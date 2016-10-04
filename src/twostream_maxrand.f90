@@ -90,11 +90,15 @@ module m_twostream_maxrand
         gc    = gc_in
 
         ! Delta scale cloud optical properties
-        call delta_scale_optprop(dtauc, w0c, gc)
+        ! call delta_scale_optprop(dtauc, w0c, gc)
 
         do k=1,ke
           call eddington_coeff_zdun (dtauf(k), w0f(k),gf(k), mu0,a11f(k),a12f(k),a13f(k),a23f(k),a33f(k), g1f(k),g2f(k) )
           call eddington_coeff_zdun (dtauc(k), w0c(k),gc(k), mu0,a11c(k),a12c(k),a13c(k),a23c(k),a33c(k), g1c(k),g2c(k) )
+          !a11f(k) = .2 * (k-1)/ke
+          !a12f(k) = .1 * (k-1)/ke
+          !a13f(k) = .3 * (k-1)/ke
+          !a23f(k) = .3 * (k-1)/ke
         enddo
 
         ! Compute Direct radiation before hand
@@ -115,8 +119,9 @@ module m_twostream_maxrand
             b3 = one
           endif
 
-          Sf(k) = a33f(k-1) * b1 * Sf(k-1) + a33c(k-1) * (one - b3) * Sc(k-1)
-          Sc(k) = a33f(k-1) * (one-b1) * Sf(k-1) + a33c(k-1) * b3 * Sc(k-1)
+
+          Sf(k) = a33f(k-1) * (b1 * Sf(k-1) + (one - b3) * Sc(k-1))
+          Sc(k) = a33c(k-1) * ((one-b1) * Sf(k-1) + b3 * Sc(k-1))
         enddo
 
         ! Last level just transmit radiation through the layer til the surface...

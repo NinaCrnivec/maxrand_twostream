@@ -47,7 +47,8 @@ void freeMemory (int nlev, double *ar_a11_c, double *ar_a11_f, double *ar_a12_c,
 
 
 
-/* Nina's twostream Maximum Random overlap routine - copied from FPdA */
+/* Nina's Delta-two-stream method with maximum-random overlap assumption for partial cloudiness;
+
 
 /*
 c = cloudy region;
@@ -56,7 +57,7 @@ f = free region (= cloud-free region);
 
 
 /*
-Moja prejsnja funkcija je bila oblike: 
+The form of twostream_maxrnd as requested by Bernhard is:
 int twostream_maxrnd (double *dtau_org_c, double *omega0_org_c, double *g_org_c,// cloudy region parameters
                       double *dtau_org_f, double *omega0_org_f, double *g_org_f,// free region parameters
                       double *cf, int nlev, double S0, double mu0, double Ag, int delta,
@@ -365,8 +366,8 @@ Edn_c(ilev)
 
   
   for(ilev=0;ilev<nlev;ilev++){
-    Edir_c[ilev]=S_c[ilev]*mu0;  // TODO, do we need to multiply with mu0 or not?
-    Edir_f[ilev]=S_f[ilev]*mu0;  // TODO, do we need to multiply with mu0 or not?
+    Edir_c[ilev]=S_c[ilev]*mu0;  
+    Edir_f[ilev]=S_f[ilev]*mu0;  
   }//e-for
 
   
@@ -605,10 +606,10 @@ matrixA[0][3] = ar_a12_f[0]*(1.0-ar_p3[0]);
 matrixA[0][4] = ar_a11_f[0]*ar_p2[0];
 matrixA[0][5] = ar_a11_f[0]*(1.0-ar_p4[0]);
 // Second row:
-matrixA[1][2] = ar_a12_f[0]*(1.0-ar_p1[0]);
-matrixA[1][3] = ar_a12_f[0]*ar_p3[0];
-matrixA[1][4] = ar_a11_f[0]*(1.0-ar_p2[0]);
-matrixA[1][5] = ar_a11_f[0]*ar_p4[0];
+matrixA[1][2] = ar_a12_c[0]*(1.0-ar_p1[0]);
+matrixA[1][3] = ar_a12_c[0]*ar_p3[0];
+matrixA[1][4] = ar_a11_c[0]*(1.0-ar_p2[0]);
+matrixA[1][5] = ar_a11_c[0]*ar_p4[0];
 // Third row is already zero; (needs to be zero due to upper boundary condition);
 // Forth row is already zero; (needs to be zero due to upper boundary condition);  
 

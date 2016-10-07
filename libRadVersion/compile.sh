@@ -1,6 +1,6 @@
 rm -f run_twomaxrnd *.o
 
-DL=/home/data/raid_linux/nina.crnivec/W2W/libRadtranSVN/trunk/
+DL=$HOME/libRadtran/
 
 make -j -C $DL libRadtran_c
 

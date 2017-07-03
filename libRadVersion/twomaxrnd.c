@@ -1,6 +1,10 @@
-/*--------------------------------------------------------------------
- * $Id: twostrebe.c 2623 2011-12-23 10:52:38Z robert.buras $
- * 
+
+/* Full solution of the multi-layer two-stream equation (solar, thermal) */
+/* with maximum-random overlap assumption for partial cloudiness        */
+/* Author: Nina Crnivec, nina.crnivec@physik.uni-muenchen.de            */
+
+
+/*-------------------------------------------------------------------
  * This file is part of libRadtran.
  * Copyright (c) 1997-2012 by Arve Kylling, Bernhard Mayer,
  *                            Claudia Emde, Robert Buras
@@ -23,11 +27,6 @@
  * Boston, MA 02111-1307, USA.
  *--------------------------------------------------------------------*/
 
-/* full solution of the multi-layer twostream equation solar + thermal */
-/* with maximum-random overlap assumption for partial cloudiness */
-/* written by Nina Crnivec */
-
-
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -37,8 +36,6 @@
 #include "solver.h"
 
 
-
-    
 int calcp1p2p3p4 (int nlev, double *cf, double *ar_p1, double *ar_p2, double *ar_p3, double *ar_p4);
 
 void delta_scale_hg (double tau, double ssa, double g, 
@@ -47,7 +44,7 @@ void delta_scale_hg (double tau, double ssa, double g,
 void eddington_coeffc (double dtau, double g, double omega0, double mu0, double *a11, double *a12,
                        double *a13, double *a23, double *a33);
 
-void calcThermalComponents(int ilyr, double *B, double dtau, double omega0, double g,
+void calcThermalComponents (int ilyr, double *B, double dtau, double omega0, double g,
 			   double *theComp1, double *theComp2);
 
 int buildMatrixA (int nlev, double Ag, double *ar_a11_c, double *ar_a11_f, double *ar_a12_c, double *ar_a12_f, 
@@ -59,9 +56,10 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
 		     double *ar_a23_c, double *ar_a23_f, double *ar_S_c, double *ar_S_f, 
 		     double *ar_p1, double *ar_p3, double *vectB);
 
-int buildVectorBthe (int nlev, double *ar_theComp1_c, double *ar_theComp1_f, 
-		     double *ar_theComp2_c, double *ar_theComp2_f, 
-		     double *ar_p1, double *ar_p3, double *vectB);
+int buildVectorBthe (int nlev, double Ag, double Bg, 
+		     double *ar_theComp1_c, double *ar_theComp1_f, 
+                     double *ar_theComp2_c, double *ar_theComp2_f, 
+                     double *vectB);
 
 int makeVectorMinusB (int nlev, double *vectB);
 
@@ -73,8 +71,10 @@ void freeMemory (int nlev, double *ar_a11_c, double *ar_a11_f, double *ar_a12_c,
                  double *ar_a13_c, double *ar_a13_f, double *ar_a23_c, double *ar_a23_f, 
                  double *ar_a33_c, double *ar_a33_f, 
                  double *ar_p1, double *ar_p2, double *ar_p3, double *ar_p4, 
+		 double *bb_sol, double *bb_the,
+		 double *ar_theComp1_c, double *ar_theComp1_f, double *ar_theComp2_c, double *ar_theComp2_f, 
                  double *S_c, double *S_f, double *Edir_c, double *Edir_f, 
-		 double *Eup_c, double *Eup_f, double *Edn_c, double *Edn_f,
+                 double *Eup_c, double *Eup_f, double *Edn_c, double *Edn_f,
                  double *bb, double *xx, double **AA);
 
 static int twostream_maxrand (double *dtau_c, double *omega0_c, double *g_c, // cloudy region parameters
@@ -104,7 +104,10 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
                float *fldir,
                float *uavg)
 {
-    int ilev=0, ilyr=0, lu=0, status=0;
+    int ilev=0;
+    int ilyr=0;
+    int lu=0;
+    int status=0;
     
     double *dtau_clr_org_d   = calloc (nlev-1, sizeof(double));
     double *omega0_clr_org_d = calloc (nlev-1, sizeof(double));
@@ -115,19 +118,19 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
     double *g_org_d      = calloc (nlev-1, sizeof(double));
     
     double *cf_d         = calloc (nlev-1, sizeof(double));
-    double *B            = malloc (nlev*   sizeof(double));
-    double *Edir=NULL, *Edn=NULL, *Eup=NULL, *Lavg=NULL;
+    double *B            = malloc (nlev*sizeof(double)); 
+    double *Edir=NULL; 
+    double *Edn=NULL;
+    double *Eup=NULL;
+    double *Lavg=NULL;
     
     const double taumax=100.0;
-    double Bg; 
+    double Bg=0.0; // Used only for thermal RT; unused (0.0) for solar RT;
     float plkavg;
     
-    //For now, but later this should be probably set within main function!!!
-    int flagSolar;
-    //int flagSolar = 1;
+    int flagSolar=0;  
     
-    if (S0 > 0)
-        flagSolar = 1;
+    if(S0 > 0.0) flagSolar = 1;
     
     /*
     printf("NINA in function twomaxrnd\n");
@@ -138,17 +141,12 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
     printf("delta = %d\n", delta);
     printf("nzout = %d\n", nzout);
     printf("flagSolar = %d\n", flagSolar);
-    //SET PLANCK TO 0 HERE FOR NOW;
-    // JUST TO MAKE SURE THAT WE ARE NOT CALCULATING THERMAL RT;
-    // UNTIL SPEYER WE ONLY NEED SOLAR RT;
-    printf("planck before = %d\n", planck);
-    //planck = 0;
-    printf("HERE planck should be zero: planck after = %d\n", planck);
+    printf("planck = %d\n", planck);
     printf("\n");
     */
     
-    if (planck) {
-        for (ilev=0;ilev<nlev;ilev++) {  /* level temperatures and Planck functions */
+    if(planck){
+        for(ilev=0;ilev<nlev;ilev++){  /* level temperatures and Planck functions */
             F77_FUNC (cplkavg, CPLKAVG) (&wvnmlo, &wvnmhi, &temper[ilev], &plkavg);
             B[ilev] = plkavg;
         }//e-for
@@ -157,18 +155,17 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
         F77_FUNC (cplkavg, CPLKAVG) (&wvnmlo, &wvnmhi, &btemp, &plkavg);
         Bg = plkavg;
     }//e-if
-    
-    
+      
     /* copy float arrays to double arrays */
-    for (ilyr=0;ilyr<nlev-1;ilyr++) {
+    for(ilyr=0;ilyr<nlev-1;ilyr++){
         dtau_org_d[ilyr] = dtau_org[ilyr];
         dtau_clr_org_d[ilyr] = dtau_clr_org[ilyr];
 
         /* restrict layer optical thickness to 100 */
-        if (dtau_org_d[ilyr] > taumax)
+        if(dtau_org_d[ilyr] > taumax)
             dtau_org_d[ilyr] = taumax;
         
-        if (dtau_clr_org_d[ilyr] > taumax)
+        if(dtau_clr_org_d[ilyr] > taumax)
             dtau_clr_org_d[ilyr] = taumax;
         
         omega0_org_d[ilyr] = omega0_org[ilyr];
@@ -182,18 +179,9 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
     }//e-for
     
     
-    /* call twostream code */
-    /*
-    status = twostream_maxrand (dtau_org_d, omega0_org_d, g_org_d,
-                                dtau_clr_org_d, omega0_clr_org_d, g_clr_org_d,
-                                cf_d, nlev, 
-                                S0, mu0, Ag, 
-                                Bg, B, delta,planck,
-                                &Edir, &Edn, &Eup, &Lavg);
-    */
-    
+    /* Call twostream_maxrand code */
+   
     // flagThermal = planck
-    
     status = twostream_maxrand (dtau_org_d, omega0_org_d, g_org_d,
                                 dtau_clr_org_d, omega0_clr_org_d, g_clr_org_d,
                                 cf_d, nlev, 
@@ -201,22 +189,22 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
                                 Bg, B, delta, flagSolar, planck,
                                 &Edir, &Edn, &Eup, &Lavg);
     
-    if (status!=0) {
+    if(status!=0){
         fprintf (stderr, "Error %d returned by twostream_maxrand()\n", status);
         return status;
-    }
+    }//e-if
     
-    /* copy results to final fields */
-    for (ilev=0;ilev<nlev;ilev++)
-        for (lu=0;lu<nzout;lu++)
-            if (zout[lu] == zd[ilev])  {
+    /* Copy results to final fields */
+    for(ilev=0;ilev<nlev;ilev++)
+        for(lu=0;lu<nzout;lu++)
+            if(zout[lu] == zd[ilev]){
                 fldn [lu] = Edn [ilev];
                 flup [lu] = Eup [ilev];
                 fldir[lu] = Edir[ilev];
                 uavg [lu] = Lavg[ilev];
-            }
+            }//e-if
             
-            /* free memory */
+        /* Free memory */
         free (Edir); 
         free (Edn); 
         free (Eup); 
@@ -227,7 +215,6 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
         free (omega0_clr_org_d);
         free (g_org_d); 
         free (g_clr_org_d);
-        
         free (B);
         
         return 0;
@@ -236,13 +223,37 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
 
 
 
-/* Delta-Eddington-Two-stream method with maximum-random overlap assumption for partial cloudiness;*/
-/* by Nina Crnivec */
+//===========================
+// FUNCTION twostream_maxrand
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
+// Delta-Eddington two-stream method with maximum-random overlap assumption for partial cloudiness
+//===========================
 
 /*
- * c = cloudy region;
- * f = free region (= cloud-free region);
- */
+c = cloudy region;
+f = cloud-free region;
+*/
+
+/*
+INPUT:
+cf = vertical profile of cloud fraction;
+nlev = total number of vertical levels;
+S0 = solar irradiance at the top of the atmosphere;
+mu0 = cosine of solar zenith angle;
+Ag = ground albedo;
+B = vertical profile of Planckian emission;
+Bg = surface Planckian emission;
+delta = flag for delta scaling of optical properties;
+flagSolar = ; 1 = solar on; 0 = solar off;
+flagThermal = ; 1 = thermal on; 0 = thermal off;
+
+OUTPUT:
+Edir = direct solar irradiance;
+Edn = diffuse downward irradiance (solar / thermal);
+Eup = diffuse upward irradiance (solar / thermal);
+Lavg = radiance (set to NaN);
+*/
+
 
 static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *g_org_c,
                               double *dtau_org_f, double *omega0_org_f, double *g_org_f, 
@@ -254,11 +265,18 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
 {
     
     int nlyr=nlev-1;    
-    
     int ilev;
     int ilyr;
-    int iStatus;
+    int iStatus = 0;
     
+    double dtau_c;
+    double omega0_c;
+    double g_c;
+    
+    double dtau_f;
+    double omega0_f;
+    double g_f;
+       
     // Eddington coefficients for cloudy regions:
     double a11_c;
     double a12_c;
@@ -266,12 +284,22 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     double a23_c;
     double a33_c;
     
-    // Eddington coefficients for clear-sky regions:
+    // Eddington coefficients for cloud-free regions:
     double a11_f;
     double a12_f;
     double a13_f;
     double a23_f;
     double a33_f;
+    
+    /*
+    The coefficients ajk are functions of optical properties of a certain layer.
+    They have the following physical meaning:
+    a11 = transmission coefficient for diffuse radiation;
+    a12 = reflection coefficient for diffuse radiation; 
+    a13 = reflection coefficient for the primary scattered parallel solar radiation;
+    a23 = transmission coefficient for the primary scattered parallel solar radiation;
+    a33 = transmission coefficient for the direct parallel solar radiation;
+    */
     
     // CREATE ARRAYS FOR VERTICAL PROFILES OF EDDINGTON COEFFICIENTS:
     
@@ -282,7 +310,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     double *ar_a23_c=calloc(nlyr,sizeof(double));
     double *ar_a33_c=calloc(nlyr,sizeof(double));
     
-    // Eddington coefficients for clear-sky regions:
+    // Eddington coefficients for cloud-free regions:
     double *ar_a11_f=calloc(nlyr,sizeof(double));
     double *ar_a12_f=calloc(nlyr,sizeof(double));
     double *ar_a13_f=calloc(nlyr,sizeof(double));
@@ -295,18 +323,11 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     double theComp2_c;
     double theComp2_f;
     
-    double *ar_theComp1_c;
-    double *ar_theComp1_f;
-    double *ar_theComp2_c;
-    double *ar_theComp2_f;
-    
-    if(flagThermal) {
-        ar_theComp1_c=calloc(nlyr,sizeof(double));
-        ar_theComp1_f=calloc(nlyr,sizeof(double));
-        ar_theComp2_c=calloc(nlyr,sizeof(double));
-        ar_theComp2_f=calloc(nlyr,sizeof(double));
-    }
-    
+    double *ar_theComp1_c=0;
+    double *ar_theComp1_f=0;
+    double *ar_theComp2_c=0;
+    double *ar_theComp2_f=0;
+     
     // Parameters related to cloud cover of two contiguous layers:
     // in Zdunkowski (pages: 180-183) denoted as: b1,b2,b3,b4;
     // here: p1, p2, p3, p4;   
@@ -315,25 +336,17 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     double *ar_p3=calloc(nlyr,sizeof(double));
     double *ar_p4=calloc(nlyr,sizeof(double));
     
-    double dtau_c;
-    double omega0_c;
-    double g_c;
-    
-    double dtau_f;
-    double omega0_f;
-    double g_f;
-    
     double **AA=NULL;
-    double *bb_sol;
-    double *bb_the;
+    double *bb_sol=0;
+    double *bb_the=0; 
     double *bb;
     double *xx; // result vector
     
-    double *S_c;  
-    double *S_f;
+    double *S_c=0;  
+    double *S_f=0;
     
-    double *Edir_c;
-    double *Edir_f;
+    double *Edir_c=0;
+    double *Edir_f=0;
     
     double *Eup_c;
     double *Eup_f;
@@ -362,20 +375,23 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         }//e-if
     }//e-for
     
-    if(flagSolar){
+    if(flagSolar){ 
         bb_sol = calloc (4*nlev, sizeof(double)); 
-    }
+    }//e-if
     
     if(flagThermal){
-        bb_the = calloc (4*nlev, sizeof(double));
-    }
+        ar_theComp1_c=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
+        ar_theComp1_f=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
+        ar_theComp2_c=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
+        ar_theComp2_f=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
+        bb_the = calloc (4*nlev, sizeof(double));	
+    }//e-if
     
     bb = calloc (4*nlev, sizeof(double)); 
     xx = calloc (4*nlev, sizeof(double)); 
-    
+     
     S_c = calloc (nlev, sizeof(double));
     S_f = calloc (nlev, sizeof(double));
-    
     Edir_c = calloc (nlev, sizeof(double));
     Edir_f = calloc (nlev, sizeof(double));
     
@@ -398,21 +414,47 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     fprintf (stderr, "\n");
     */
     
+    // At the moment it is only possible to calculate solar OR thermal RT, but not both simultaneously;
+    if ((flagSolar && flagThermal) || (!flagSolar && !flagThermal)){
+    //if (iStatus != 1234){ //For TESTING freeMemory
+      fprintf (stderr, "Eror - invalid input parameters - use flagSolar and flagThermal alternatingly \n");
+      fprintf (stderr, "flagSolar = %d , flagThermal = %d\n", flagSolar, flagThermal);
+      freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the,
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
+      return -1;
+    }//e-if
+    
+    fprintf (stderr, "Nina 1\n");
+    
     // Calculate vertical profiles of p1, p2, pr3 and p4 from vertical profile of partial cloud cover;
     // INPUT: nlev, cf;
     // OUTPUT: ar_p1, ar_p2, ar_p3, ar_p4
     iStatus = calcp1p2p3p4(nlev, cf, ar_p1, ar_p2, ar_p3, ar_p4);
-    if (iStatus != 0)  {
+    if(iStatus != 0){
         fprintf (stderr, "Error calculating vertical profiles of p1, p2, p3 and p4 from cloud cover; ERROR=%d \n", iStatus);
-        return -1;
+	freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the,
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
+        return -2;
     }//e-if
     
+    
+    fprintf (stderr, "Nina 2\n");
     
     // Calculate vertical profiles of Eddington coefficients
     for(ilyr=0;ilyr<nlyr;ilyr++){
         
-        /* delta scaling of optical properties for cloudy regions */
-        if (delta) {
+        /* Delta scaling of optical properties for cloudy regions */
+        if(delta){
             delta_scale_hg (dtau_org_c[ilyr], omega0_org_c[ilyr], g_org_c[ilyr], 
                             &dtau_c, &omega0_c, &g_c);                    
         }else{
@@ -421,7 +463,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
             g_c      = g_org_c[ilyr];
         }//e-if
         
-        /* Clear-sky optical properties */
+        /* Cloud-free region optical properties */
         dtau_f   = dtau_org_f[ilyr];
         omega0_f = omega0_org_f[ilyr];
         g_f      = g_org_f[ilyr];  
@@ -434,10 +476,8 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         
         
         /* Calculate Eddington coefficients for a given layer */ 
-        // Cloudy:
-        eddington_coeffc (dtau_c, g_c, omega0_c, mu0, &a11_c, &a12_c, &a13_c, &a23_c, &a33_c); 
-        //Clear-sky:
-        eddington_coeffc (dtau_f, g_f, omega0_f, mu0, &a11_f, &a12_f, &a13_f, &a23_f, &a33_f);
+        eddington_coeffc (dtau_c, g_c, omega0_c, mu0, &a11_c, &a12_c, &a13_c, &a23_c, &a33_c); // Cloudy region;
+        eddington_coeffc (dtau_f, g_f, omega0_f, mu0, &a11_f, &a12_f, &a13_f, &a23_f, &a33_f); // Cloud-free region;
         
         // Save Eddington coefficients for each layer to arrays:
         ar_a11_c[ilyr] = a11_c;
@@ -455,7 +495,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         ar_a33_c[ilyr] = a33_c;
         ar_a33_f[ilyr] = a33_f;
         
-        if(flagThermal) {
+        if(flagThermal){
             // Calculate expressions for the thermal part of vector B;
             calcThermalComponents(ilyr, B, dtau_c, omega0_c, g_c, &theComp1_c, &theComp2_c);
             calcThermalComponents(ilyr, B, dtau_f, omega0_f, g_f, &theComp1_f, &theComp2_f);
@@ -466,13 +506,15 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
             ar_theComp2_c[ilyr] = theComp2_c;
             ar_theComp2_f[ilyr] = theComp2_f;
         }//e-if
-    }//e-for over ilyr;
+    }//e-for
     
-    
+   
+    fprintf (stderr, "Nina 3\n");
+   
     // Step #A: initialize vectors S_c and S_f
     // S[0]= S0 = S_c[0] + S_f[0] = cf[0]*S0 + (1.0-cf[0])*S0;
-    
-    if(flagSolar) {
+     
+    if(flagSolar){
         S_c[0]=cf[0]*S0;    
         S_f[0]=(1.0-cf[0])*S0;
         
@@ -480,8 +522,10 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
             S_c[ilev]=ar_a33_c[ilev-1]*((1.0-ar_p1[ilev-1])*S_f[ilev-1] + ar_p3[ilev-1]*S_c[ilev-1]); 
             S_f[ilev]=ar_a33_f[ilev-1]*(ar_p1[ilev-1]*S_f[ilev-1] + (1.0-ar_p3[ilev-1])*S_c[ilev-1]); 
         }//e-for
-    }
+    }//e-if
     
+     
+   
     
     // PRINT OUT S-VECTORS FOR TESTING:
     /*
@@ -490,22 +534,28 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     }//e-for
     */
     
-    
     // Equation system has the form: xx = AA*xx + bb;
     // Step #B: build matrix AA; 
     // INPUT: nlev, Ag, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_p1, ar_p2, ar_p3, ar_p4;
     // OUTPUT: AA
     iStatus = buildMatrixA (nlev, Ag, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, 
                             ar_p1, ar_p2, ar_p3, ar_p4, AA);
-    if (iStatus != 0){
+    if(iStatus != 0){
         fprintf (stderr, "buildMatrixA ERROR=%d \n", iStatus);
-        //freeMemory (...);
-        return -2;
+        freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the, 
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
+        return -3;
     }//e-if
+    
+    fprintf (stderr, "Nina 4\n");
     
     // Display matrix AA to check;
     //displayMatrix (nlev, AA, "A");
-    
     
     // Step #C: make matrix A2=AA-IdentityMatrix=AA-II, save in to the same matrix AA;
     // Since the equation system in the form A*x=b is needed for function solve_gauss;
@@ -513,84 +563,115 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     // AA*xx - xx + bb = 0; (AA-II)*xx + bb = 0;
     // FINAL FORM OF THE SYSTEM SENT IN solve_gauss: (AA-II)*xx = -bb;
     iStatus = makeMatrixA2 (nlev, AA);
-    if (iStatus != 0){
+    if(iStatus != 0){
         fprintf (stderr, "makeMatrixA2 ERROR=%d \n", iStatus);
-        //freeMemory (...);
-        return -3;
+        freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the,  
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
+        return -4;
     }//e-if
+    
+    fprintf (stderr, "Nina 5\n");
     
     // Display matrix A2=AA-II to check;
     //displayMatrix (nlev, AA, "A-I");
     
-    
-    
     // Step #D-i): build vector bb_sol 
-    // INPUT: Ag, mu0 (?), ar_a13_c, ar_a13_f, ar_a23_c, ar_a23_f, S_c, S_f, ar_p1, ar_p3; 
+    // INPUT: Ag, mu0, ar_a13_c, ar_a13_f, ar_a23_c, ar_a23_f, S_c, S_f, ar_p1, ar_p3; 
     // OUTPUT: bb_sol
-    if(flagSolar) {
+    if(flagSolar){
         iStatus = buildVectorBsol (nlev, Ag, mu0, ar_a13_c, ar_a13_f, ar_a23_c, ar_a23_f, S_c, S_f, ar_p1, ar_p3, bb_sol);
-        if (iStatus != 0){
+        if(iStatus != 0){
             fprintf (stderr, "buildVectorBsol ERROR=%d \n", iStatus);
-            //freeMemory (...);
-            return -4;
-        }//e-if
-    }//e-ifFlagSolar
-    
-    
-    // Step #D-ii): build vector bb_the (thermal part) 
-    // INPUT: nlev, ..., ar_p1, ar_p3; 
-    // OUTPUT: bb_the
-    if(flagThermal) {
-        iStatus = buildVectorBthe (nlev, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p3, bb_the);
-        if (iStatus != 0){
-            fprintf (stderr, "buildVectorBthe ERROR=%d \n", iStatus);
-            //freeMemory (...);
+            freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the,  
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
             return -5;
         }//e-if
-    }//e-ifFlagThermal
+    }//e-if
     
+    fprintf (stderr, "Nina 6\n");
     
+    // Step #D-ii): build vector bb_the (thermal part) 
+    // INPUT: nlev, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p3; 
+    // OUTPUT: bb_the
+    if(flagThermal){
+        iStatus = buildVectorBthe (nlev, Ag, Bg, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, bb_the);
+        if(iStatus != 0){
+            fprintf (stderr, "buildVectorBthe ERROR=%d \n", iStatus);
+            freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the, 
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
+            return -6;
+        }//e-if
+    }//e-if
+
+    fprintf (stderr, "Nina 7\n");
     
-    for(ilev=0; ilev<4*nlev; ilev++) {
+    for(ilev=0; ilev<4*nlev; ilev++){
         bb[ilev] = 0;
-        if(flagSolar) {
+        if(flagSolar){
             bb[ilev] += bb_sol[ilev];
-        }
-        if(flagThermal) {
+        }//e-if
+        if(flagThermal){
             bb[ilev] += bb_the[ilev];
-        }
+        }//e-if
     }//e-for
     
-    
+    fprintf (stderr, "Nina 8\n");
     
     // Display vector B
     //displayVector (nlev, bb, "B");
     
     // STEP #E: Make vector -bb and save it to the same vector bb;
     iStatus = makeVectorMinusB (nlev, bb);
-    if (iStatus != 0){
+    if(iStatus != 0){
         fprintf (stderr, "makeVectorMinusB ERROR=%d \n", iStatus);
-        //freeMemory (...);
-        return -6;
+        freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the,  
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
+        return -7;
     }//e-if
+    
+    fprintf (stderr, "Nina 9\n");
     
     // Display vector -B
     //displayVector (nlev, bb, "-B");
     
-    
     // Step #F: solve AA*xx=bb --> xx = ...
-    // AA = quadratic matri
+    // AA = quadratic matrix
     iStatus = solve_gauss (AA, bb, 4*nlev, &xx);
-    if (iStatus != 0){
+    if(iStatus != 0){
         fprintf (stderr, "Error %d solving equation system\n", iStatus);
-        //freeMemory (...);
-        return -7;
+        freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
+                ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
+                ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the,  
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
+                S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
+                bb, xx, AA);
+        return -8;
     }//e-if
     
     // Display vector X (=xx):
     //displayVector (nlev, xx, "X");
-    
-    
+      
     /*
      *  Form of vector X (=xx) for certain ilev:
      *  Eup_f(ilev)
@@ -599,20 +680,20 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
      *  Edn_c(ilev) 
      */
     
+    fprintf (stderr, "Nina 10\n");
+    
     for(ilev=0;ilev<nlev;ilev++){
         Eup_f[ilev] = xx[4*ilev];
         Eup_c[ilev] = xx[4*ilev+1];
         Edn_f[ilev] = xx[4*ilev+2];
         Edn_c[ilev] = xx[4*ilev+3];
     }//e-for
-    
-    
+      
     for(ilev=0;ilev<nlev;ilev++){
         Edir_c[ilev]=S_c[ilev]*mu0;  
         Edir_f[ilev]=S_f[ilev]*mu0;  
     }//e-for
-    
-    
+      
     /* Print out irradiances for cloudy and cloud-free regions */
     /*
     fprintf(stderr, "\n");
@@ -623,6 +704,8 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     }//e-for
     */
     
+    fprintf (stderr, "Nina 11\n");
+        
     /* SUM UP THE IRRADIANCES FOR CLOUDY AND CLOUD-FREE REGIONS TO OBTAIN THE FINAL RESULT */
     for(ilev=0;ilev<nlev;ilev++){
         (*Edir)[ilev] = Edir_c[ilev] + Edir_f[ilev];
@@ -630,24 +713,19 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         (*Edn)[ilev] = Edn_c[ilev] + Edn_f[ilev];  
         (*Lavg)[ilev] = NAN;
     }//e-for  
-    
-    
+       
+    fprintf (stderr, "Nina 12\n");   
     // Free allocated memory before return 0
     freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
                 ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
                 ar_p1, ar_p2, ar_p3, ar_p4, 
+		bb_sol, bb_the,
+		ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, 
                 S_c, S_f, Edir_c, Edir_f, Eup_c, Eup_f, Edn_c, Edn_f,
                 bb, xx, AA);
-    
-    
+       
     return 0;
 }//e-twostream_maxrand
-
-
-
-
-
-
 
 
 
@@ -664,16 +742,15 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
  * This follows from physical reasoning or from applying l'Hopital's rule.
  */
 
-
 //======================
 // FUNCTION calcp1p2p3p4
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //======================
 // INPUT: nlev, cf;
 // OUTPUT: ar_p1, ar_p2, ar_p3, ar_p4;
 int calcp1p2p3p4 (int nlev, double *cf, double *ar_p1, double *ar_p2, double *ar_p3, double *ar_p4)
 {
-    int ilyr;
-    
+    int ilyr; 
     int nlyr;
     
     double max_p1; // = max(cf[ilyr],cf[ilyr-1]); appears in the expression for p1;
@@ -690,8 +767,7 @@ int calcp1p2p3p4 (int nlev, double *cf, double *ar_p1, double *ar_p2, double *ar
      * ar_p3[ilyr] = min(cf[ilyr], cf[ilyr-1]) / cf[ilyr-1]; 
      * ar_p4[ilyr] = min(cf[ilyr], cf[ilyr+1]) / cf[ilyr+1];   
      */
-    
-    
+      
     // Calculate vertical profiles of p1, p3
     // Special case: ilyr=0;
     for (ilyr=0;ilyr<nlyr;ilyr++) {
@@ -754,10 +830,9 @@ int calcp1p2p3p4 (int nlev, double *cf, double *ar_p1, double *ar_p2, double *ar
             if (cf[ilyr+1] == 0.0) ar_p4[ilyr] = 1.0;
             else ar_p4[ilyr] = min_p4 / cf[ilyr+1];
         }//e-if
-    }//e-for over ilyr;
+    }//e-for
     
-    
-    // Print to terminal for test;
+    // Print to terminal for TESTING;
     /*
     printf("\n");
     printf("nlev = %d\n", nlev);
@@ -776,9 +851,13 @@ int calcp1p2p3p4 (int nlev, double *cf, double *ar_p1, double *ar_p2, double *ar
 }//e-calcp1p2p3p4
 
 
-
-
-
+/*
+Explanation from Zdunkowski (page 169):
+Two-stream approximations often yield unsatisfactory results because in these methods
+the strong forward scattering peak of the phase function is not accounted for.
+A distinct improvement of a particular two-stream method is achieved by utilizing
+the delta-scaled phase function.
+*/
 
 //=========================
 // FUNCTION: delta_scale_hg
@@ -836,11 +915,13 @@ void eddington_coeffc (double dtau, double g, double omega0, double mu0,
 
 
 
-
 //================================
 // FUNCTION: calcThermalComponents
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //================================
-void calcThermalComponents(int ilyr, double *B, double dtau, double omega0, double g,
+// INPUT: ilyr, B, dtau, omega0, g;
+// OUTPUT: theComp1, theComp2;
+void calcThermalComponents (int ilyr, double *B, double dtau, double omega0, double g,
                            double *theComp1, double *theComp2)
 {
     double B0;
@@ -891,15 +972,16 @@ void calcThermalComponents(int ilyr, double *B, double dtau, double omega0, doub
 
 
 
-
 //=======================
 // FUNCTION: buildMatrixA
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //=======================
 // INPUT: nlev, Ag, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_p1, ar_p2, ar_p3, ar_p4;
 // OUTPUT: matrixA;
 
 int buildMatrixA (int nlev, double Ag, double *ar_a11_c, double *ar_a11_f, double *ar_a12_c, double *ar_a12_f, 
-                  double *ar_p1, double *ar_p2, double *ar_p3, double *ar_p4, double **matrixA)
+                  double *ar_p1, double *ar_p2, double *ar_p3, double *ar_p4, 
+		  double **matrixA)
 {
     int i;     // position in levels (e.g. for nlev=21, i in range: 0 - 20)
     int iRow;  // row position in matrix A (e.g. for nlev=21, iRow in range: 0 - 83)
@@ -921,13 +1003,11 @@ int buildMatrixA (int nlev, double Ag, double *ar_a11_c, double *ar_a11_f, doubl
     // Third row is already zero; (needs to be zero due to upper boundary condition);
     // Forth row is already zero; (needs to be zero due to upper boundary condition);  
     
-    
     //Print to the terminal for test:
     //fprintf (stderr, "A[0][3]=%f\n", (matrixA[0][3]));
     //fprintf (stderr, "ar_a12_f[0]=%f\n", (ar_a12_f[0]));
     //fprintf (stderr, "ar_p3[0]=%f\n", (ar_p3[0]));
     //fprintf (stderr, "(1.0-ar_p3[0])=%f\n", (1.0-(ar_p3[0])));
-    
     
     nextColEup = 6; // index of column for Eup(level1)
     nextColEdw = 2; // index of column for Edw(level1)
@@ -973,8 +1053,11 @@ int buildMatrixA (int nlev, double Ag, double *ar_a11_c, double *ar_a11_f, doubl
 
 //======================
 // FUNCTION makeMatrixA2
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //======================
 // Just write -1 to all diagonal elements of matrix A (in the same matrix)
+// INPUT: nlev;
+// OUTPUT: matrixA;
 int makeMatrixA2 (int nlev, double **matrixA)
 {
     int iRow;
@@ -986,15 +1069,16 @@ int makeMatrixA2 (int nlev, double **matrixA)
 
 
 
-
 //=========================
 // FUNCTION buildVectorBsol
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //=========================
 // INPUT: nlev, Ag, mu0, ar_a13_c, ar_a13_f, ar_a23_c, ar_a23_f, ar_S_c, ar_S_f, ar_p1, ar_p3;
 // OUTPUT: vectB;
 int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *ar_a13_f, 
                      double *ar_a23_c, double *ar_a23_f, double *ar_S_c, double *ar_S_f, 
-                     double *ar_p1, double *ar_p3, double *vectB)
+                     double *ar_p1, double *ar_p3, 
+		     double *vectB)
 {
     int i;  // position in levels
     int j;  // position in vector B
@@ -1004,8 +1088,7 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
     vectB[1] = ar_a13_c[0]*ar_S_c[0];
     vectB[2] = 0.0; // upper boundary condition
     vectB[3] = 0.0; // upper boundary condition
-    
-    
+       
     for (i=1; i<(nlev-1);i++){
         j = 4*i;     
         vectB[j]   = ar_a13_f[i]*(ar_p1[i]*ar_S_f[i] + (1.0-ar_p3[i])*ar_S_c[i]);
@@ -1013,8 +1096,7 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
         vectB[j+2] = ar_a23_f[i-1]*(ar_p1[i-1]*ar_S_f[i-1] + (1.0-ar_p3[i-1])*ar_S_c[i-1]);
         vectB[j+3] = ar_a23_c[i-1]*((1.0-ar_p1[i-1])*ar_S_f[i-1] + ar_p3[i-1]*ar_S_c[i-1]); 
     }//e-for
-    
-    
+       
     // Treat last four values seperately:
     vectB[4*nlev-4] = Ag*mu0*ar_S_f[nlev-1]; //Lower boundary condition;
     vectB[4*nlev-3] = Ag*mu0*ar_S_c[nlev-1]; //Lower boundary condition;
@@ -1026,7 +1108,8 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
 
 
 
-
+/*
+FIRST DRAFT FOR VECTOR B IN THERMAL SPECTRAL RANGE:
 //=========================
 // FUNCTION buildVectorBthe
 //=========================
@@ -1034,7 +1117,8 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
 // OUTPUT: bb_the;
 int buildVectorBthe (int nlev, double *ar_theComp1_c, double *ar_theComp1_f, 
                      double *ar_theComp2_c, double *ar_theComp2_f, 
-                     double *ar_p1, double *ar_p3, double *vectB)
+                     double *ar_p1, double *ar_p3, 
+		     double *vectB)
 {
     int i;  // position in levels
     int j;  // position in vector B
@@ -1047,8 +1131,6 @@ int buildVectorBthe (int nlev, double *ar_theComp1_c, double *ar_theComp1_f,
     vectB[2] = 0.0; // upper boundary condition
     vectB[3] = 0.0; // upper boundary condition
     
-    // TODO-POSTENO PREMISLI ENACBE ZA TERMALNI VEKTOR - NAPISI OBLIKO VEKTORJA NA LIST JUTRI!!!   
-    
     for (i=1; i<(nlev-1);i++){
         j = 4*i;     
         vectB[j]   = ar_p1[i]*ar_theComp1_f[i] + (1.0-ar_p3[i])*ar_theComp1_c[i];
@@ -1058,19 +1140,64 @@ int buildVectorBthe (int nlev, double *ar_theComp1_c, double *ar_theComp1_f,
     }//e-for
     
     // Treat last four values seperately:
-    vectB[4*nlev-4] = 100000.0; //TODO, CURRENTLY WRONG; Lower boundary condition;
-    vectB[4*nlev-3] = 100000.0; //TODO, CURRENTLY WRONG; Lower boundary condition;
+    vectB[4*nlev-4] = 100000.0; //TODO,Lower boundary condition;
+    vectB[4*nlev-3] = 100000.0; //TODO,Lower boundary condition;
     vectB[4*nlev-2] = ar_p1[nlev-2]*ar_theComp2_f[nlev-2] + (1.0-ar_p3[nlev-2])*ar_theComp2_c[nlev-2];
     vectB[4*nlev-1] = (1.0-ar_p1[nlev-2])*ar_theComp2_f[nlev-2] + ar_p3[nlev-2]*ar_theComp2_c[nlev-2];   
+    
+    return 0;
+}//e-buildVectorBthe
+*/
+
+
+
+//=========================
+// FUNCTION buildVectorBthe
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
+//=========================
+// INPUT: nlev, Ag, Bg, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p3;
+// OUTPUT: bb_the;
+
+// thermal component 1 = Abstrahlung nach oben;
+// thermal component 2 = Abstrahlung nach unten;
+
+int buildVectorBthe (int nlev, double Ag, double Bg, 
+		     double *ar_theComp1_c, double *ar_theComp1_f, 
+                     double *ar_theComp2_c, double *ar_theComp2_f, 
+                     double *vectB)
+{
+    int i;  // position in levels
+    int j;  // position in vector B
+    double constPi = 3.141593;
+    
+    // Set initial four values: 
+    vectB[0] = ar_theComp1_f[0]; 
+    vectB[1] = ar_theComp1_c[0]; 
+    vectB[2] = 0.0; // Upper boundary condition
+    vectB[3] = 0.0; // Upper boundary condition
+        
+    for(i=1; i<(nlev-1); i++){
+        j = 4*i;     
+        vectB[j]   = ar_theComp1_f[i];
+        vectB[j+1] = ar_theComp1_c[i];
+        vectB[j+2] = ar_theComp2_f[i-1];
+        vectB[j+3] = ar_theComp2_c[i-1]; 
+    }//e-for
+    
+    // Treat last four values seperately:
+    vectB[4*nlev-4] = (1.0-Ag)*constPi*Bg; // Lower boundary condition;
+    vectB[4*nlev-3] = (1.0-Ag)*constPi*Bg; // Lower boundary condition;
+    vectB[4*nlev-2] = ar_theComp2_f[i]; 
+    vectB[4*nlev-1] = ar_theComp2_c[i]; 
     
     return 0;
 }//e-buildVectorBthe
 
 
 
-
 //==========================
 // FUNCTION makeVectorMinusB
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //==========================
 int makeVectorMinusB (int nlev, double *vectB)
 {
@@ -1083,15 +1210,17 @@ int makeVectorMinusB (int nlev, double *vectB)
 
 
 
-
 //=====================
 // FUNCTION: freeMemory
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //=====================
 // Function to free all allocated memory
 void freeMemory (int nlev, double *ar_a11_c, double *ar_a11_f, double *ar_a12_c, double *ar_a12_f, 
                  double *ar_a13_c, double *ar_a13_f, double *ar_a23_c, double *ar_a23_f, 
                  double *ar_a33_c, double *ar_a33_f, 
                  double *ar_p1, double *ar_p2, double *ar_p3, double *ar_p4, 
+		 double *bb_sol, double *bb_the, 
+		 double *ar_theComp1_c, double *ar_theComp1_f, double *ar_theComp2_c, double *ar_theComp2_f, 
                  double *S_c, double *S_f, double *Edir_c, double *Edir_f, 
                  double *Eup_c, double *Eup_f, double *Edn_c, double *Edn_f,
                  double *bb, double *xx, double **AA)
@@ -1099,42 +1228,48 @@ void freeMemory (int nlev, double *ar_a11_c, double *ar_a11_f, double *ar_a12_c,
     int i;
     
     // Check if memory is allocated and free it
-    if (*ar_a11_c != 0) free(ar_a11_c);
-    if (*ar_a11_f != 0) free(ar_a11_f);
-    if (*ar_a12_c != 0) free(ar_a12_c);
-    if (*ar_a12_f != 0) free(ar_a12_f);
-    if (*ar_a13_c != 0) free(ar_a13_c);
-    if (*ar_a13_f != 0) free(ar_a13_f);
-    if (*ar_a23_c != 0) free(ar_a23_c);
-    if (*ar_a23_f != 0) free(ar_a23_f);
-    if (*ar_a33_c != 0) free(ar_a33_c);
-    if (*ar_a33_f != 0) free(ar_a33_f);
-    if (*ar_p1 != 0) free(ar_p1);
-    if (*ar_p2 != 0) free(ar_p2);
-    if (*ar_p3 != 0) free(ar_p3);
-    if (*ar_p4 != 0) free(ar_p4);
-    if (*S_c != 0) free(S_c);
-    if (*S_f != 0) free(S_f);
-    if (*Edir_c != 0) free(Edir_c);
-    if (*Edir_f != 0) free(Edir_f);
-    if (*Eup_c != 0) free(Eup_c);
-    if (*Eup_f != 0) free(Eup_f);
-    if (*Edn_c != 0) free(Edn_c);
-    if (*Edn_f != 0) free(Edn_f);
-    if (*bb != 0) free(bb);
-    if (*xx != 0) free(xx);
+    free(ar_a11_c);
+    free(ar_a11_f);
+    free(ar_a12_c);
+    free(ar_a12_f);
+    free(ar_a13_c);
+    free(ar_a13_f);
+    free(ar_a23_c);
+    free(ar_a23_f);
+    free(ar_a33_c);
+    free(ar_a33_f);
+    free(ar_p1);
+    free(ar_p2);
+    free(ar_p3);
+    free(ar_p4);
     
-    if (**AA != 0) {
-        for (i=0; i < 4*nlev; i++) free(AA[i]);    
-    }//e-if
+    if (ar_theComp1_c != 0) free(ar_theComp1_c);
+    if (ar_theComp1_f != 0) free(ar_theComp1_f);         
+    if (ar_theComp2_c != 0) free(ar_theComp2_c);
+    if (ar_theComp2_f != 0) free(ar_theComp2_f); 
+    if (bb_sol != 0) free(bb_sol);
+    if (bb_the != 0) free(bb_the); 
     
+    free(S_c);
+    free(S_f); 
+    free(Edir_c);
+    free(Edir_f);    
+    free(Eup_c);
+    free(Eup_f);
+    free(Edn_c);
+    free(Edn_f);
+    free(bb);
+    free(xx);
+      
+    for (i=0; i < 4*nlev; i++) free(AA[i]);    
+  
 }//e-freeMemory
-
 
 
 
 //=======================
 // FUNCTION displayVector
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //=======================
 // Function to display vector B and vector X (to check their form);
 void displayVector (int nlev, double *vect, char *name)
@@ -1153,9 +1288,11 @@ void displayVector (int nlev, double *vect, char *name)
 
 
 
-
 //========================
 // FUNCTION: displayMatrix
+// Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
+// (Remark: This function was originally written for FPdA;
+// not necessarily nice display for larger matrix A here);
 //========================
 // Function to display matrix A or -A
 void displayMatrix (int nlev, double **matrixA, char *name)

@@ -15,7 +15,7 @@ static int twostream_maxrand (double *dtau_c, double *omega0_c, double *g_c, // 
 
 
 //int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
-//	       double *dtau_clr_org, double *omega0_clr_org, double *g_clr_org, // NEW
+//	       float *dtau_clr_org, float *omega0_clr_org, float *g_clr_org, 
 //	       float *cf, int nlev, 
 //	       double S0, double mu0,
 //	       double Ag,
@@ -46,9 +46,9 @@ int nlyr=nlev-1;
 float *dtau_c = calloc(nlyr,sizeof(float));
 float *ssa_c = calloc(nlyr,sizeof(float));
 float *g_c = calloc(nlyr,sizeof(float));   
-double *dtau_f = calloc(nlyr,sizeof(double));
-double *ssa_f = calloc(nlyr,sizeof(double));
-double *g_f = calloc(nlyr,sizeof(double));
+float *dtau_f = calloc(nlyr,sizeof(double));
+float *ssa_f = calloc(nlyr,sizeof(double));
+float *g_f = calloc(nlyr,sizeof(double));
 float *cf = calloc(nlyr,sizeof(float)); 
 double S0;   // extraterrestrial irradiance [W/m2]
 double mu0;  // mu0=cos(sza); 
@@ -71,10 +71,13 @@ double tau_c_total;
 double tau_f_total;
 
 // Set constants and flags here:
-S0=1000.0; 
+//S0=1000.0; 
+S0=0.0; 
 mu0=0.5; 
-Ag=0.1;   
-planck=0;
+//Ag=0.1;   
+Ag=0.0;  
+//planck=0;
+planck=1;
 delta=0;
 nzout=nlev;
 btemp = 1.0; // izmisljena vrednost
@@ -103,7 +106,7 @@ for (ilyr=0; ilyr<nlyr; ilyr++){
 //g = 0.88
 
 // Use this loop if you want to set:
-// Optical properties(cloud part) = optical properties(cloud-free part):
+// Optical properties(cloudy part) = optical properties(cloud-free part):
 /*
 for(ilyr=0; ilyr<nlyr; ilyr++){
   dtau_c[ilyr] = dtau_f[ilyr];
@@ -145,11 +148,9 @@ fprintf (stderr, "\n");
 fprintf (stderr, "Vertical profiles of layer quantities:\n");
 fprintf (stderr, "\n");  
 
-for(ilyr=0; ilyr<nlyr; ilyr++){
-   fprintf(stderr, "ilyr = %d, cf = %.4f\n", ilyr, cf[ilyr]);
-   fprintf(stderr, "ilyr = %d, dtau_c = %.4f, dtau_f = %.4f\n", ilyr, dtau_c[ilyr], dtau_f[ilyr]);
-   fprintf(stderr, "ilyr = %d, ssa_c = %.4f, ssa_f = %.4f\n", ilyr, ssa_c[ilyr], ssa_f[ilyr]);
-   fprintf(stderr, "ilyr = %d, g_c = %.4f, g_f = %.4f\n", ilyr, g_c[ilyr], g_f[ilyr]);
+fprintf(stderr,"ilyr, cf, dtau_c, dtau_f, ssa_c, ssa_f, g_c, g_f\n");
+for (ilyr=0; ilyr<nlyr; ilyr++){
+   fprintf(stderr, "%d, %.2f, %.4f, %.4f, %.2f, %.2f, %.2f, %.2f\n",ilyr,cf[ilyr],dtau_c[ilyr],dtau_f[ilyr],ssa_c[ilyr],ssa_f[ilyr],g_c[ilyr],g_f[ilyr]);    
 }//e-for
 fprintf (stderr, "\n");
 
@@ -170,6 +171,28 @@ iStatus = twomaxrnd (dtau_c, ssa_c, g_c, dtau_f, ssa_f, g_f,
 		    cf, nlev, S0, mu0, Ag, planck, delta, nzout, zd, temper, 
 		    btemp, wvnmlo, wvnmhi, zout, 
 		    Edw, Eup, Edir, uavg);
+
+/*
+int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
+               float *dtau_clr_org, float *omega0_clr_org, float *g_clr_org, 
+               float *cf, int nlev, 
+               double S0, double mu0,
+               double Ag,
+               int planck,
+               int delta,
+               int nzout,
+               float *zd,
+               float *temper,
+               float btemp,
+               float wvnmlo,
+               float wvnmhi,
+               float *zout, 
+               float *fldn, 
+               float *flup, 
+               float *fldir,
+               float *uavg)
+*/
+
 	        
 if (iStatus!=0) {
   fprintf (stderr, "Error %d returned by twomaxrnd()\n", iStatus);
@@ -186,15 +209,14 @@ fprintf (stderr, "\n");
 fprintf (stderr, "Final results:\n");
 fprintf (stderr, "Vertical profiles of total irradiances [W/m2]:\n");
 
+fprintf(stderr, "ilev, Edir, Edw, Eup\n");
 for (ilev=0; ilev<nlev; ilev++){
-   fprintf (stderr, "ilev = %04d, Edir = %10.4lf, Edw = %10.4lf, Eup = %10.4lf\n", ilev, Edir[ilev], Edw[ilev], Eup[ilev]); 
+   fprintf (stderr, "ilev = %02d, %10.2lf, %10.2lf, %10.2lf\n", ilev, Edir[ilev], Edw[ilev], Eup[ilev]); 
 }//e-for
 
 fprintf (stderr, "\n");  
 fprintf (stderr, "The END\n");
 fprintf (stderr, "\n");  
-
-
 
 
 return 0;

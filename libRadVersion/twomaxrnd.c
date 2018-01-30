@@ -58,7 +58,8 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
 
 int buildVectorBthe (int nlev, double Ag, double Bg, 
 		     double *ar_theComp1_c, double *ar_theComp1_f, 
-                     double *ar_theComp2_c, double *ar_theComp2_f, 
+                     double *ar_theComp2_c, double *ar_theComp2_f,
+                     double *cf,
                      double *vectB);
 
 int makeVectorMinusB (int nlev, double *vectB);
@@ -132,8 +133,9 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
     
     if(S0 > 0.0) flagSolar = 1;
     
+    //printf("NINA in function twomaxrnd !\n");
+    
     /*
-    printf("NINA in function twomaxrnd\n");
     printf("nlev = %d\n", nlev);
     printf("S0 = %f\n", S0);
     printf("mu0 = %f\n", mu0);
@@ -142,8 +144,11 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
     printf("nzout = %d\n", nzout);
     printf("flagSolar = %d\n", flagSolar);
     printf("planck = %d\n", planck);
+    printf("wvnmlo = %f\n", wvnmlo);
+    printf("wvnmhi = %f\n", wvnmhi);
     printf("\n");
     */
+    
     
     if(planck){
         for(ilev=0;ilev<nlev;ilev++){  /* level temperatures and Planck functions */
@@ -155,6 +160,16 @@ int twomaxrnd (float *dtau_org, float *omega0_org, float *g_org,
         F77_FUNC (cplkavg, CPLKAVG) (&wvnmlo, &wvnmhi, &btemp, &plkavg);
         Bg = plkavg;
     }//e-if
+      
+    // Umetno nastavi TODO, to gre na koncu ven !!!
+    /*
+    if(planck){
+       for(ilev=0;ilev<nlev;ilev++){
+          B[ilev] = 100.0; 
+       }//e-for
+       Bg = 100.0;
+    }//e-if
+    */
       
     /* copy float arrays to double arrays */
     for(ilyr=0;ilyr<nlev-1;ilyr++){
@@ -354,16 +369,16 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     double *Edn_c;
     double *Edn_f;
     
-    
-    //fprintf(stderr, "!!! START OF FUNCTION twostream_maxrand\n");
-    //fprintf(stderr, "!!! nlev = %d\n", nlev);
-    //fprintf(stderr, "!!! S0 = %f\n", S0);
-    //fprintf(stderr, "!!! mu0 = %f\n", mu0);
-    //fprintf(stderr, "!!! Ag = %f\n", Ag);
-    //fprintf(stderr, "!!! delta = %d\n", delta);
-    //fprintf(stderr, "!!! flagSolar = %d\n", flagSolar);
-    //fprintf(stderr, "!!! flagThermal = %d\n", flagThermal);
-    
+    /*
+    fprintf(stderr, "!!! START OF FUNCTION twostream_maxrand\n");
+    fprintf(stderr, "!!! nlev = %d\n", nlev);
+    fprintf(stderr, "!!! S0 = %f\n", S0);
+    fprintf(stderr, "!!! mu0 = %f\n", mu0);
+    fprintf(stderr, "!!! Ag = %f\n", Ag);
+    fprintf(stderr, "!!! delta = %d\n", delta);
+    fprintf(stderr, "!!! flagSolar = %d\n", flagSolar);
+    fprintf(stderr, "!!! flagThermal = %d\n", flagThermal);
+    */
     
     /* allocate memory for equation system */
     AA = calloc (4*nlev, sizeof(double*));
@@ -380,10 +395,10 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     }//e-if
     
     if(flagThermal){
-        ar_theComp1_c=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
-        ar_theComp1_f=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
-        ar_theComp2_c=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
-        ar_theComp2_f=calloc(nlev,sizeof(double)); // TODO !!! PROBABLY NEED TO CHANGE nlyr TO nlev !!!
+        ar_theComp1_c=calloc(nlev,sizeof(double)); 
+        ar_theComp1_f=calloc(nlev,sizeof(double)); 
+        ar_theComp2_c=calloc(nlev,sizeof(double));
+        ar_theComp2_f=calloc(nlev,sizeof(double)); 
         bb_the = calloc (4*nlev, sizeof(double));	
     }//e-if
     
@@ -414,6 +429,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     fprintf (stderr, "\n");
     */
     
+    
     // At the moment it is only possible to calculate solar OR thermal RT, but not both simultaneously;
     if ((flagSolar && flagThermal) || (!flagSolar && !flagThermal)){
     //if (iStatus != 1234){ //For TESTING freeMemory
@@ -428,10 +444,10 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
                 bb, xx, AA);
       return -1;
     }//e-if
+  
+    //fprintf (stderr, "Nina 1\n");
     
-    fprintf (stderr, "Nina 1\n");
-    
-    // Calculate vertical profiles of p1, p2, pr3 and p4 from vertical profile of partial cloud cover;
+    // Calculate vertical profiles of p1, p2, p3 and p4 from vertical profile of partial cloud cover;
     // INPUT: nlev, cf;
     // OUTPUT: ar_p1, ar_p2, ar_p3, ar_p4
     iStatus = calcp1p2p3p4(nlev, cf, ar_p1, ar_p2, ar_p3, ar_p4);
@@ -448,8 +464,8 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     }//e-if
     
     
-    fprintf (stderr, "Nina 2\n");
-    
+    //fprintf (stderr, "Nina 2\n");
+
     // Calculate vertical profiles of Eddington coefficients
     for(ilyr=0;ilyr<nlyr;ilyr++){
         
@@ -474,7 +490,21 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         if (omega0_c > 0.999999) omega0_c = 0.999999;
         if (omega0_f > 0.999999) omega0_f = 0.999999;
         
+        // Tukaj umetno napisi: cloudy lastnosti enake clear-sky lastnostim:
+        // V tem primeru moram dobiti enak rezultat;
         
+        /*
+        dtau_c = dtau_f;
+        omega0_c = omega0_f;
+        g_c = g_f;
+        */
+        
+        /*
+        dtau_f = dtau_c;
+        omega0_f = omega0_c;
+        g_f = g_c;
+        */
+  
         /* Calculate Eddington coefficients for a given layer */ 
         eddington_coeffc (dtau_c, g_c, omega0_c, mu0, &a11_c, &a12_c, &a13_c, &a23_c, &a33_c); // Cloudy region;
         eddington_coeffc (dtau_f, g_f, omega0_f, mu0, &a11_f, &a12_f, &a13_f, &a23_f, &a33_f); // Cloud-free region;
@@ -505,14 +535,25 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
             
             ar_theComp2_c[ilyr] = theComp2_c;
             ar_theComp2_f[ilyr] = theComp2_f;
+          
+            // Weight cloudy components with cf and cloud-free components with (1-cf) 
+            // and save them to the arrays containing vertical profiles:
+            /*
+            ar_theComp1_c[ilyr] = cf[ilyr]*theComp1_c;
+            ar_theComp1_f[ilyr] = (1.0-cf[ilyr])*theComp1_f;
+            ar_theComp2_c[ilyr] = cf[ilyr]*theComp2_c;
+            ar_theComp2_f[ilyr] = (1.0-cf[ilyr])*theComp2_f;
+            */
+            
         }//e-if
     }//e-for
     
    
-    fprintf (stderr, "Nina 3\n");
+    //fprintf (stderr, "Nina 3\n");
    
     // Step #A: initialize vectors S_c and S_f
     // S[0]= S0 = S_c[0] + S_f[0] = cf[0]*S0 + (1.0-cf[0])*S0;
+     
      
     if(flagSolar){
         S_c[0]=cf[0]*S0;    
@@ -523,9 +564,6 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
             S_f[ilev]=ar_a33_f[ilev-1]*(ar_p1[ilev-1]*S_f[ilev-1] + (1.0-ar_p3[ilev-1])*S_c[ilev-1]); 
         }//e-for
     }//e-if
-    
-     
-   
     
     // PRINT OUT S-VECTORS FOR TESTING:
     /*
@@ -552,7 +590,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         return -3;
     }//e-if
     
-    fprintf (stderr, "Nina 4\n");
+    //fprintf (stderr, "Nina 4\n");
     
     // Display matrix AA to check;
     //displayMatrix (nlev, AA, "A");
@@ -575,7 +613,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         return -4;
     }//e-if
     
-    fprintf (stderr, "Nina 5\n");
+    //fprintf (stderr, "Nina 5\n");
     
     // Display matrix A2=AA-II to check;
     //displayMatrix (nlev, AA, "A-I");
@@ -598,13 +636,14 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         }//e-if
     }//e-if
     
-    fprintf (stderr, "Nina 6\n");
+    //fprintf (stderr, "Nina 6\n");
     
     // Step #D-ii): build vector bb_the (thermal part) 
-    // INPUT: nlev, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p3; 
-    // OUTPUT: bb_the
+    // INPUT: nlev, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p2, ar_p3, ar_p4; 
+    // OUTPUT: bb_the;
     if(flagThermal){
-        iStatus = buildVectorBthe (nlev, Ag, Bg, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, bb_the);
+        //iStatus = buildVectorBthe (nlev, Ag, Bg, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p2, ar_p3, ar_p4, cf, bb_the);
+        iStatus = buildVectorBthe (nlev, Ag, Bg, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, cf, bb_the);
         if(iStatus != 0){
             fprintf (stderr, "buildVectorBthe ERROR=%d \n", iStatus);
             freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
@@ -617,8 +656,9 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
             return -6;
         }//e-if
     }//e-if
-
-    fprintf (stderr, "Nina 7\n");
+    
+    
+    //fprintf (stderr, "Nina 7\n");
     
     for(ilev=0; ilev<4*nlev; ilev++){
         bb[ilev] = 0;
@@ -630,7 +670,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         }//e-if
     }//e-for
     
-    fprintf (stderr, "Nina 8\n");
+    //fprintf (stderr, "Nina 8\n");
     
     // Display vector B
     //displayVector (nlev, bb, "B");
@@ -649,13 +689,24 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         return -7;
     }//e-if
     
-    fprintf (stderr, "Nina 9\n");
+    //fprintf (stderr, "Nina 9\n");
     
     // Display vector -B
     //displayVector (nlev, bb, "-B");
     
     // Step #F: solve AA*xx=bb --> xx = ...
     // AA = quadratic matrix
+    
+    /*
+    PRINT OUT FOR TESTING;
+    for (int iy=0; iy<4*nlev; iy++) {
+      for (int ix=0; ix<4*nlev; ix++) 
+	fprintf (stderr, "%.6e ", AA[iy][ix]);
+      
+      fprintf (stderr, " %.6e\n", bb[iy]);
+    }  
+    */ 
+
     iStatus = solve_gauss (AA, bb, 4*nlev, &xx);
     if(iStatus != 0){
         fprintf (stderr, "Error %d solving equation system\n", iStatus);
@@ -680,7 +731,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
      *  Edn_c(ilev) 
      */
     
-    fprintf (stderr, "Nina 10\n");
+    //fprintf (stderr, "Nina 10\n");
     
     for(ilev=0;ilev<nlev;ilev++){
         Eup_f[ilev] = xx[4*ilev];
@@ -704,7 +755,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
     }//e-for
     */
     
-    fprintf (stderr, "Nina 11\n");
+    //fprintf (stderr, "Nina 11\n");
         
     /* SUM UP THE IRRADIANCES FOR CLOUDY AND CLOUD-FREE REGIONS TO OBTAIN THE FINAL RESULT */
     for(ilev=0;ilev<nlev;ilev++){
@@ -714,7 +765,7 @@ static int twostream_maxrand (double *dtau_org_c, double *omega0_org_c, double *
         (*Lavg)[ilev] = NAN;
     }//e-for  
        
-    fprintf (stderr, "Nina 12\n");   
+    //fprintf (stderr, "Nina 12\n");   
     // Free allocated memory before return 0
     freeMemory (nlev, ar_a11_c, ar_a11_f, ar_a12_c, ar_a12_f, ar_a13_c, ar_a13_f, 
                 ar_a23_c, ar_a23_f, ar_a33_c, ar_a33_f, 
@@ -888,8 +939,14 @@ void eddington_coeffc (double dtau, double g, double omega0, double mu0,
     double lambda=0, b=0, A=0;
     double denom=0;
     
-    alpha1 = (1.0-omega0)+0.75*(1.0-omega0*g);
-    alpha2 = -(1.0-omega0)+0.75*(1.0-omega0*g);
+    if (omega0==0) {
+      alpha1 = 1.75;
+      alpha2 = -0.25;
+    }
+    else {
+      alpha1 = (1.0-omega0)+0.75*(1.0-omega0*g);
+      alpha2 = -(1.0-omega0)+0.75*(1.0-omega0*g);
+    }
     
     lambda=sqrt(alpha1*alpha1-alpha2*alpha2);
     
@@ -897,6 +954,9 @@ void eddington_coeffc (double dtau, double g, double omega0, double mu0,
     
     *a11=A*2.0*lambda/alpha2;
     *a12=A*(exp(lambda*dtau)-exp(-lambda*dtau));
+    
+    //PRINT OUT FOR TESTING:
+    //fprintf (stderr, "a12 = %f %f %f, omega0 = %f, g = %f\n", A, lambda, dtau,omega0, g);
     
     b=0.5-0.75*g*mu0;
     alpha3=-omega0*b; 
@@ -915,12 +975,21 @@ void eddington_coeffc (double dtau, double g, double omega0, double mu0,
 
 
 
+
+
 //================================
 // FUNCTION: calcThermalComponents
 // Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //================================
 // INPUT: ilyr, B, dtau, omega0, g;
 // OUTPUT: theComp1, theComp2;
+
+// theComp1 = Planckian emission term of a given layer; Abstrahlung nach oben; 
+// theComp2 = Planckian emission term of a given layer; Abstrahlung nach unten;
+
+// theComp1 = analogous to term "b1" in twostrebe.c code;
+// theComp2 = analogous to term "b2" in twostrebe.c code;
+
 void calcThermalComponents (int ilyr, double *B, double dtau, double omega0, double g,
                            double *theComp1, double *theComp2)
 {
@@ -947,9 +1016,15 @@ void calcThermalComponents (int ilyr, double *B, double dtau, double omega0, dou
         B1 = 0;
         B0 = (B[ilyr+1]+B[ilyr])*0.5;
     }//e-if
-    
-    alpha1= (1.0-omega0)+0.75*(1.0-omega0*g);
-    alpha2=-(1.0-omega0)+0.75*(1.0-omega0*g);
+
+    if (omega0==0) {
+      alpha1 = 1.75;
+      alpha2 = -0.25;
+    }
+    else {
+      alpha1 = (1.0-omega0)+0.75*(1.0-omega0*g);
+      alpha2 = -(1.0-omega0)+0.75*(1.0-omega0*g);
+    }
     
     lambda=sqrt(alpha1*alpha1-alpha2*alpha2);
     
@@ -995,7 +1070,11 @@ int buildMatrixA (int nlev, double Ag, double *ar_a11_c, double *ar_a11_f, doubl
     matrixA[0][3] = ar_a12_f[0]*(1.0-ar_p3[0]);
     matrixA[0][4] = ar_a11_f[0]*ar_p2[0];
     matrixA[0][5] = ar_a11_f[0]*(1.0-ar_p4[0]);
-    // Second row:
+
+    //PRINT OUT FOR TESTING:
+    //fprintf (stderr, "NAN?  %f %f %f\n", matrixA[0][2], ar_a12_f[0], ar_p1[0]);
+
+    // Second row: 
     matrixA[1][2] = ar_a12_c[0]*(1.0-ar_p1[0]);
     matrixA[1][3] = ar_a12_c[0]*ar_p3[0];
     matrixA[1][4] = ar_a11_c[0]*(1.0-ar_p2[0]);
@@ -1015,7 +1094,7 @@ int buildMatrixA (int nlev, double Ag, double *ar_a11_c, double *ar_a11_f, doubl
     for(i=1;i<nlev;i++){	
         iRow = 4*i;
         
-        if (i == (nlev-1)){ // lower boundary condition for the forth and third row from bottom up of matrix A;
+        if(i == (nlev-1)){ // lower boundary condition for the forth and third row from bottom up of matrix A;
             matrixA[iRow][nextColEup] = Ag;
             matrixA[iRow+1][nextColEup+1] = Ag;
         }else{
@@ -1089,7 +1168,7 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
     vectB[2] = 0.0; // upper boundary condition
     vectB[3] = 0.0; // upper boundary condition
        
-    for (i=1; i<(nlev-1);i++){
+    for(i=1; i<(nlev-1);i++){
         j = 4*i;     
         vectB[j]   = ar_a13_f[i]*(ar_p1[i]*ar_S_f[i] + (1.0-ar_p3[i])*ar_S_c[i]);
         vectB[j+1] = ar_a13_c[i]*((1.0-ar_p1[i])*ar_S_f[i] + ar_p3[i]*ar_S_c[i]);
@@ -1104,50 +1183,184 @@ int buildVectorBsol (int nlev, double Ag, double mu0, double *ar_a13_c, double *
     vectB[4*nlev-1] = ar_a23_c[nlev-2]*((1.0-ar_p1[nlev-2])*ar_S_f[nlev-2] + ar_p3[nlev-2]*ar_S_c[nlev-2]); 
     
     return 0;
-}//e-buildVectorB
-
+}//e-buildVectorBsol
 
 
 /*
-FIRST DRAFT FOR VECTOR B IN THERMAL SPECTRAL RANGE:
 //=========================
 // FUNCTION buildVectorBthe
 //=========================
-// INPUT: nlev, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p3;
+// INPUT: nlev, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p2, ar_p3, ar_p4, cf;
 // OUTPUT: bb_the;
-int buildVectorBthe (int nlev, double *ar_theComp1_c, double *ar_theComp1_f, 
+int buildVectorBthe (int nlev, double Ag, double Bg, 
+                     double *ar_theComp1_c, double *ar_theComp1_f, 
                      double *ar_theComp2_c, double *ar_theComp2_f, 
-                     double *ar_p1, double *ar_p3, 
-		     double *vectB)
+                     double *ar_p1, double *ar_p2, double *ar_p3, double *ar_p4, double *cf,
+                     double *vectB)
 {
     int i;  // position in levels
     int j;  // position in vector B
+    double constPi = 3.141593;
     
+    //Reihenfolge in vector X:
+    //    Eup_f
+    //    Eup_c
+    //    Edw_f
+    //    Edw_c
+        
+    //For Edw_f and Edw_c the coefficients should be the same as in solar vector B; thus related to ar_p1 and ar_p3;
+    //For Eup_f and Eup_c the coefficients should be related to ar_p2 and ar_p4;    
+
     // Set initial four values: 
-    //vectB[0] = ar_p1[0]*ar_theComp1_f[0];
-    //vectB[1] = ar_p3[0]*ar_theComp1_c[0];
-    vectB[0] = ar_p1[0]*ar_theComp1_f[0] + (1.0-ar_p3[0])*ar_theComp1_c[0];
-    vectB[1] = (1.0-ar_p1[0])*ar_theComp1_f[0] + ar_p3[0]*ar_theComp1_c[0];
+    vectB[0] = ar_p2[0]*ar_theComp1_f[0] + (1.0-ar_p4[0])*ar_theComp1_c[0]; //CHECK INDEX
+    vectB[1] = (1.0-ar_p2[0])*ar_theComp1_f[0] + ar_p4[0]*ar_theComp1_c[0]; //CHECK INDEX
     vectB[2] = 0.0; // upper boundary condition
     vectB[3] = 0.0; // upper boundary condition
     
-    for (i=1; i<(nlev-1);i++){
+    //printf ("ar_p1[0] = %f\n", ar_p1[0]); //TEST
+    //printf ("ar_p2[0] = %f\n", ar_p2[0]); //TEST
+    //printf ("ar_p3[0] = %f\n", ar_p3[0]); //TEST
+    //printf ("ar_p4[0] = %f\n", ar_p4[0]); //TEST
+   
+    // RESULT:
+    // ar_p1[0] = 1.000000
+    // ar_p2[0] = 1.000000
+    // ar_p3[0] = 1.000000
+    // ar_p4[0] = 1.000000
+    
+    for(i=1; i<(nlev-1);i++){
         j = 4*i;     
-        vectB[j]   = ar_p1[i]*ar_theComp1_f[i] + (1.0-ar_p3[i])*ar_theComp1_c[i];
-        vectB[j+1] = (1.0-ar_p1[i])*ar_theComp1_f[i] + ar_p3[i]*ar_theComp1_c[i];
+        vectB[j]   = ar_p2[i]*ar_theComp1_f[i] + (1.0-ar_p4[i])*ar_theComp1_c[i]; //CHECK INDEX
+        vectB[j+1] = (1.0-ar_p2[i])*ar_theComp1_f[i] + ar_p4[i]*ar_theComp1_c[i]; //CHECK INDEX
         vectB[j+2] = ar_p1[i-1]*ar_theComp2_f[i-1] + (1.0-ar_p3[i-1])*ar_theComp2_c[i-1];
         vectB[j+3] = (1.0-ar_p1[i-1])*ar_theComp2_f[i-1] + ar_p3[i-1]*ar_theComp2_c[i-1]; 
     }//e-for
     
-    // Treat last four values seperately:
-    vectB[4*nlev-4] = 100000.0; //TODO,Lower boundary condition;
-    vectB[4*nlev-3] = 100000.0; //TODO,Lower boundary condition;
-    vectB[4*nlev-2] = ar_p1[nlev-2]*ar_theComp2_f[nlev-2] + (1.0-ar_p3[nlev-2])*ar_theComp2_c[nlev-2];
-    vectB[4*nlev-1] = (1.0-ar_p1[nlev-2])*ar_theComp2_f[nlev-2] + ar_p3[nlev-2]*ar_theComp2_c[nlev-2];   
+    //printf ("nlev = %d\n", nlev);                   //TEST
+    //printf ("i =  %d\n", i);                        //TEST
+    //printf ("Bg = %f\n", Bg);                       //TEST
+    //printf ("Ag = %f\n", Ag);                       //TEST
+    //printf ("constPi = %f\n", constPi);             //TEST
+    //printf ("cf[nlev-2] = %f\n", cf[nlev-2]);       //TEST
+    //printf ("ar_p1[nlev-2] = %f\n", ar_p1[nlev-2]); //TEST
+    //printf ("ar_p2[nlev-2] = %f\n", ar_p2[nlev-2]); //TEST
+    //printf ("ar_p3[nlev-2] = %f\n", ar_p3[nlev-2]); //TEST
+    //printf ("ar_p4[nlev-2] = %f\n", ar_p4[nlev-2]); //TEST
+    //printf ("\n"); 
     
+    // RESULT:
+    // ar_p1[nlev-2] = 1.000000
+    // ar_p2[nlev-2] = 1.000000
+    // ar_p3[nlev-2] = 1.000000
+    // ar_p4[nlev-2] = 1.000000
+        
+    // Treat last four values seperately:
+    // i=nlev-1; // bottom (ground) level;
+    j = 4*(nlev-1);     
+    vectB[j] = (1.0-cf[nlev-2])*(1.0-Ag)*constPi*Bg;    //Lower boundary condition; 
+    vectB[j+1] = cf[nlev-2]*(1.0-Ag)*constPi*Bg;        //Lower boundary condition; 
+    vectB[j+2] = ar_p1[nlev-2]*ar_theComp2_f[nlev-2] + (1.0-ar_p3[nlev-2])*ar_theComp2_c[nlev-2]; //OK
+    vectB[j+3] = (1.0-ar_p1[nlev-2])*ar_theComp2_f[nlev-2] + ar_p3[nlev-2]*ar_theComp2_c[nlev-2]; //OK
+   
     return 0;
 }//e-buildVectorBthe
 */
+
+
+
+
+/*
+Twostrebe:
+
+------- nlev = 0 
+theComp1
+theComp2
+--------nlev = 1 
+
+Eup(0) = ... + theComp1
+Edw(0)
+Eup(1)
+Edw(1) = ... + theComp2
+*/
+
+
+
+/*
+Twomaxrnd:
+
+------- nlev = 0 
+theComp1_c(0), theComp1_f(0)
+theComp2_c(0), theComp2_f(0)
+--------nlev = 1 
+ 
+ 
+Eup_f(0) = ... + theComp1_f(0)
+Eup_c(0) = ... + theComp1_c(0)
+Edw_f(0)
+Edw_c(0) 
+
+Eup_f(1) 
+Eup_c(1)
+Edw_f(1) = ... + theComp2_f(0)
+Edw_c(1) = ... + theComp2_c(0)
+
+
+------- nlev = nlev-2
+theComp1_c(nlev-2), theComp1_f(nlev-2)
+theComp2_c(nlev-2), theComp2_f(nlev-2)
+--------nlev = nlev-1 (GROUND)
+
+Eup_f(nlev-2) = ... + theComp1_f(nlev-2)
+Eup_c(nlev-2) = ... + theComp1_c(nlev-2)
+Edw_f(nlev-2)
+Edw_c(nlev-2) 
+
+Eup_f(nlev-1) = ... + (1-Ag)*Pi*Bg
+Eup_c(nlev-1) = ... + (1-Ag)*Pi*Bg
+Edw_f(nlev-1) = ... + theComp2_f(nlev-2)
+Edw_c(nlev-1) = ... + theComp2_c(nlev-2)
+*/
+
+
+
+/*
+Twomaxrnd - WEIGHTED WITH CLOUD-FRACTION:
+
+------- nlev = 0 
+theComp1_c(0), theComp1_f(0)
+theComp2_c(0), theComp2_f(0)
+--------nlev = 1 
+ 
+ 
+Eup_f(0) = ... + (1-cf(0))*theComp1_f(0)
+Eup_c(0) = ... + cf(0)*theComp1_c(0)
+Edw_f(0) = 0.0
+Edw_c(0) = 0.0
+
+Eup_f(1) 
+Eup_c(1) 
+Edw_f(1) = ... + (1-cf(0))*theComp2_f(0)
+Edw_c(1) = ... + cf(0)*theComp2_c(0)
+
+
+
+------- nlev = nlev-2
+theComp1_c(nlev-2), theComp1_f(nlev-2)
+theComp2_c(nlev-2), theComp2_f(nlev-2)
+--------nlev = nlev-1 (GROUND)
+
+Eup_f(nlev-2) = ... + (1-cf(nlev-2))*theComp1_f(nlev-2)
+Eup_c(nlev-2) = ... + cf(nlev-2)*theComp1_c(nlev-2)
+Edw_f(nlev-2)
+Edw_c(nlev-2) 
+
+Eup_f(nlev-1) = ... + (1-cf(nlev-2))*(1-Ag)*Pi*Bg
+Eup_c(nlev-1) = ... + cf(nlev-2)*(1-Ag)*Pi*Bg
+Edw_f(nlev-1) = ... + (1-cf(nlev-2))*theComp2_f(nlev-2)
+Edw_c(nlev-1) = ... + cf(nlev-2)*theComp2_c(nlev-2)
+*/
+
+
 
 
 
@@ -1155,7 +1368,7 @@ int buildVectorBthe (int nlev, double *ar_theComp1_c, double *ar_theComp1_f,
 // FUNCTION buildVectorBthe
 // Author: Nina Crnivec; nina.crnivec@physik.uni-muenchen.de
 //=========================
-// INPUT: nlev, Ag, Bg, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, ar_p1, ar_p3;
+// INPUT: nlev, Ag, Bg, ar_theComp1_c, ar_theComp1_f, ar_theComp2_c, ar_theComp2_f, cf;
 // OUTPUT: bb_the;
 
 // thermal component 1 = Abstrahlung nach oben;
@@ -1163,35 +1376,40 @@ int buildVectorBthe (int nlev, double *ar_theComp1_c, double *ar_theComp1_f,
 
 int buildVectorBthe (int nlev, double Ag, double Bg, 
 		     double *ar_theComp1_c, double *ar_theComp1_f, 
-                     double *ar_theComp2_c, double *ar_theComp2_f, 
+                     double *ar_theComp2_c, double *ar_theComp2_f,
+                     double *cf,
                      double *vectB)
 {
     int i;  // position in levels
     int j;  // position in vector B
     double constPi = 3.141593;
-    
+ 
     // Set initial four values: 
-    vectB[0] = ar_theComp1_f[0]; 
-    vectB[1] = ar_theComp1_c[0]; 
+    vectB[0] = (1.0-cf[0])*ar_theComp1_f[0]; 
+    vectB[1] = cf[0]*ar_theComp1_c[0];
     vectB[2] = 0.0; // Upper boundary condition
     vectB[3] = 0.0; // Upper boundary condition
         
     for(i=1; i<(nlev-1); i++){
         j = 4*i;     
-        vectB[j]   = ar_theComp1_f[i];
-        vectB[j+1] = ar_theComp1_c[i];
-        vectB[j+2] = ar_theComp2_f[i-1];
-        vectB[j+3] = ar_theComp2_c[i-1]; 
+        vectB[j]   = (1.0-cf[i])*ar_theComp1_f[i];
+        vectB[j+1] = cf[i]*ar_theComp1_c[i];
+        vectB[j+2] = (1.0-cf[i-1])*ar_theComp2_f[i-1];
+        vectB[j+3] = cf[i-1]*ar_theComp2_c[i-1]; 
     }//e-for
-    
+   
     // Treat last four values seperately:
-    vectB[4*nlev-4] = (1.0-Ag)*constPi*Bg; // Lower boundary condition;
-    vectB[4*nlev-3] = (1.0-Ag)*constPi*Bg; // Lower boundary condition;
-    vectB[4*nlev-2] = ar_theComp2_f[i]; 
-    vectB[4*nlev-1] = ar_theComp2_c[i]; 
+    // i=nlev-1; // bottom (ground) level;
+    j = 4*(nlev-1); 
+    vectB[j] = (1.0-cf[nlev-2])*(1.0-Ag)*constPi*Bg; // Lower boundary condition; 
+    vectB[j+1] = cf[nlev-2]*(1.0-Ag)*constPi*Bg;     // Lower boundary condition; 
+    vectB[j+2] = (1.0-cf[nlev-2])*ar_theComp2_f[nlev-2]; 
+    vectB[j+3] = cf[nlev-2]*ar_theComp2_c[nlev-2]; 
     
     return 0;
 }//e-buildVectorBthe
+
+
 
 
 
